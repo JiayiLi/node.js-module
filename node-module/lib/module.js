@@ -27,15 +27,17 @@ const internalModule = require('internal/module');
 const vm = require('vm');
 const assert = require('assert').ok; //主要用于断言，如果表达式不符合预期，就抛出一个错误。assert方法接受两个参数，当第一个参数对应的布尔值为true时，不会有任何提示，返回undefined。当第一个参数对应的布尔值为false时，会抛出一个错误，该错误的提示信息就是第二个参数设定的字符串。ok是assert方法的另一个名字，与assert方法完全一样。
 const fs = require('fs'); //fs是filesystem的缩写，该模块提供本地文件的读写能力，基本上是POSIX文件操作命令的简单包装。但是，这个模块几乎对所有操作提供异步和同步两种操作方式，供开发者选择。
-const internalFS = require('internal/fs');
+const internalFS = require('internal/fs'); //内部fs模块
 const path = require('path');
 
-//Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。
+//Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。 感兴趣了解 https://book.douban.com/reading/29343610/
 const internalModuleReadFile = process.binding('fs').internalModuleReadFile; // 读取文件内容
 const internalModuleStat = process.binding('fs').internalModuleStat; //判断是文件夹还是文件  以及是否存在,可以查看 http://yanglimei.com/2016/09/21/nodemodulerewrite.html
 const preserveSymlinks = !!process.binding('config').preserveSymlinks;
 
-function stat(filename) {
+
+// stat 用来判断文件目录是否存在，以及路径类型 是文件夹还是文件
+function stat(filename) { //filename:路径
   filename = path._makeLong(filename);
   const cache = stat.cache;
 
@@ -43,13 +45,16 @@ function stat(filename) {
   if (cache !== null) {
     const result = cache.get(filename);
 
-    // 如果缓存中有该模块直接返回
+    // 如果缓存中有该路径直接返回
     if (result !== undefined) return result;
   }
 
-  // 没有缓存，internalModuleStat头部引入，用来判断是文件夹还是文件，以及是否存在
+  // internalModuleStat头部引入，用来判断是文件夹还是文件，以及是否存在
   const result = internalModuleStat(filename); 
+  // 如果有缓存，则将新路径加入缓存中
   if (cache !== null) cache.set(filename, result);
+
+  //并返回结果
   return result;
 }
 stat.cache = null;
@@ -119,6 +124,7 @@ function readPackage(requestPath) {
   return pkg;
 }
 
+// 读取package.json文件,返回路径
 function tryPackage(requestPath, exts, isMain) {
   var pkg = readPackage(requestPath);
 
@@ -139,6 +145,9 @@ const realpathCache = new Map();
 // if using --preserve-symlinks and isMain is false,
 // keep symlinks intact, otherwise resolve to the
 // absolute realpath.
+// 判断路径是否存在
+// 如果用了--preserve-symlinks 命令并且 非主入口文件，则保证符号路径完整
+// 否则解析为绝对实际路径
 function tryFile(requestPath, isMain) {
   const rc = stat(requestPath);
   if (preserveSymlinks && !isMain) {
@@ -147,6 +156,8 @@ function tryFile(requestPath, isMain) {
   return rc === 0 && toRealPath(requestPath);
 }
 
+
+// fs.realpathSync()用来获取当前执行js文件的真实路径
 function toRealPath(requestPath) {
   return fs.realpathSync(requestPath, {
     [internalFS.realpathCacheKey]: realpathCache
@@ -154,6 +165,7 @@ function toRealPath(requestPath) {
 }
 
 // given a path check a the file exists with any of the set extensions
+// 给定一个路径，检查文件是否存在任何一个扩展名
 function tryExtensions(p, exts, isMain) {
   for (var i = 0; i < exts.length; i++) {
     const filename = tryFile(p + exts[i], isMain);
@@ -186,49 +198,61 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
 
   //如果不在缓存中，则开始查找
   var exts;
-  // 当前加载的模块名称大于0位并且最后一位是 ／
+  // 当前加载的模块名称大于0位并且最后一位是 ／ ，即是否有后缀的目录斜杠
   var trailingSlash = request.length > 0 &&
                       request.charCodeAt(request.length - 1) === 47/*/*/;
 
   // For each path
   // 循环每一个可能的路径
   for (var i = 0; i < paths.length; i++) {
+
     // Don't search further if path doesn't exist
+    // 如果路径存在就继续执行，不存在就继续检验下一个路径 stat 获取路径状态
     const curPath = paths[i];
     if (curPath && stat(curPath) < 1) continue;
-    var basePath = path.resolve(curPath, request);
+    var basePath = path.resolve(curPath, request); //生成绝对路径
     var filename;
 
-    var rc = stat(basePath);
+    //stat 头部定义的函数，用来获取路径状态，判断路径类型，是文件还是文件夹
+    var rc = stat(basePath); 
     if (!trailingSlash) {
-      if (rc === 0) {  // File.
-        if (preserveSymlinks && !isMain) {
+      if (rc === 0) {  // File. // 若是文件
+
+        // 如果是使用模块的符号路径而不是真实路径，并且不是主入口文件
+        if (preserveSymlinks && !isMain) {  
           filename = path.resolve(basePath);
         } else {
           filename = toRealPath(basePath);
         }
-      } else if (rc === 1) {  // Directory.
+
+      } else if (rc === 1) {  // Directory. // 若是目录
         if (exts === undefined)
+          //目录中是否存在 package.json 
           exts = Object.keys(Module._extensions);
         filename = tryPackage(basePath, exts, isMain);
       }
 
+      // 如果尝试了上面都没有得到filename 匹配所有扩展名进行尝试，是否存在
       if (!filename) {
         // try it with each of the extensions
         if (exts === undefined)
           exts = Object.keys(Module._extensions);
+        // 该模块文件加上后缀名js .json .node进行尝试，是否存在 
         filename = tryExtensions(basePath, exts, isMain);
       }
     }
 
     if (!filename && rc === 1) {  // Directory.
       if (exts === undefined)
+        // 目录中是否存在 package.json 
         exts = Object.keys(Module._extensions);
       filename = tryPackage(basePath, exts, isMain);
     }
 
     if (!filename && rc === 1) {  // Directory.
       // try it with each of the extensions at "index"
+      // 是否存在目录名 + index + 后缀名
+      // 尝试 index.js index.json index.node
       if (exts === undefined)
         exts = Object.keys(Module._extensions);
       filename = tryExtensions(path.resolve(basePath, 'index'), exts, isMain);
@@ -247,10 +271,21 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
         }
       }
 
+      // 将找到的文件路径存入返回缓存，然后返回
       Module._pathCache[cacheKey] = filename;
       return filename;
     }
   }
+
+  // 所以从这里可以看出，对于具体的文件的优先级：
+  // 1. 具体文件。
+  // 2. 加上后缀。
+  // 3. package.json
+  // 4  index加上后缀
+  // 候选路径以当前文件夹，nodejs系统文件夹和node_module中的文件夹为候选，以上述顺序找到任意一个，
+  // 就直接返回
+
+  // 没有找到文件，返回false 
   return false;
 };
 
@@ -677,19 +712,30 @@ Module.prototype._compile = function(content, filename) {
 };
 
 
+// 根据不同的文件类型，三种后缀，Node.js会进行不同的处理和执行
+// 对于.js的文件会，先同步读取文件，然后通过module._compile解释执行。
+// 对于.json文件的处理，先同步的读入文件的内容，无异常的话直接将模块的exports赋值为json文件的内容 
+// 对于.node文件的打开处理，通常为C/C++文件。
+
 // Native extension for .js
 Module._extensions['.js'] = function(module, filename) {
+  // 同步读取文件
   var content = fs.readFileSync(filename, 'utf8');
+
+  // 通过module._compile解释执行
   module._compile(internalModule.stripBOM(content), filename);
 };
 
 
 // Native extension for .json
 Module._extensions['.json'] = function(module, filename) {
+  // 同步的读入文件的内容
   var content = fs.readFileSync(filename, 'utf8');
   try {
+    // 直接将模块的exports赋值为json文件的内容
     module.exports = JSON.parse(internalModule.stripBOM(content));
   } catch (err) {
+    // 异常处理
     err.message = filename + ': ' + err.message;
     throw err;
   }

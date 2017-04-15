@@ -21,7 +21,7 @@
 
 'use strict';
 
-const NativeModule = require('native_module'); //用于管理js模块，文件位于lib/internal/bootstrap_node.js中
+const NativeModule = require('native_module'); //用于管理js模块，实现位于lib/internal/bootstrap_node.js中
 const util = require('util');
 const internalModule = require('internal/module');
 const vm = require('vm');
@@ -29,18 +29,26 @@ const assert = require('assert').ok; //主要用于断言，如果表达式不�
 const fs = require('fs'); //fs是filesystem的缩写，该模块提供本地文件的读写能力，基本上是POSIX文件操作命令的简单包装。但是，这个模块几乎对所有操作提供异步和同步两种操作方式，供开发者选择。
 const internalFS = require('internal/fs');
 const path = require('path');
-const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
-const internalModuleStat = process.binding('fs').internalModuleStat;
+
+//Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。
+const internalModuleReadFile = process.binding('fs').internalModuleReadFile; // 读取文件内容
+const internalModuleStat = process.binding('fs').internalModuleStat; //判断是文件夹还是文件  以及是否存在,可以查看 http://yanglimei.com/2016/09/21/nodemodulerewrite.html
 const preserveSymlinks = !!process.binding('config').preserveSymlinks;
 
 function stat(filename) {
   filename = path._makeLong(filename);
   const cache = stat.cache;
+
+  // 如果有缓存
   if (cache !== null) {
     const result = cache.get(filename);
+
+    // 如果缓存中有该模块直接返回
     if (result !== undefined) return result;
   }
-  const result = internalModuleStat(filename);
+
+  // 没有缓存，internalModuleStat头部引入，用来判断是文件夹还是文件，以及是否存在
+  const result = internalModuleStat(filename); 
   if (cache !== null) cache.set(filename, result);
   return result;
 }
@@ -69,7 +77,7 @@ Module.globalPaths = [];
 
 Module.wrapper = NativeModule.wrapper;
 Module.wrap = NativeModule.wrap;
-Module._debug = util.debuglog('module');
+Module._debug = util.debuglog('module'); //这个方法用来打印出调试信息,具体可以看 https://chyingp.gitbooks.io/nodejs/%E6%A8%A1%E5%9D%97/util.html
 
 // We use this alias for the preprocessor that filters it out
 const debug = Module._debug;
@@ -158,24 +166,32 @@ function tryExtensions(p, exts, isMain) {
 }
 
 var warned = false;
-Module._findPath = function(request, paths, isMain) {
-  if (path.isAbsolute(request)) {
+Module._findPath = function(request, paths, isMain) {//request 当前加载的模块名称,paths Module._resolveLookupPaths()函数返回一个数组[id , paths],即模块可能在的所有路径，/* isMain */ false  是不是主入口文件
+
+  //path.isAbsolute()判断参数 path 是否是绝对路径。
+  if (path.isAbsolute(request)) {  
     paths = [''];
   } else if (!paths || paths.length === 0) {
     return false;
   }
 
+
   var cacheKey = request + '\x00' +
                 (paths.length === 1 ? paths[0] : paths.join('\x00'));
   var entry = Module._pathCache[cacheKey];
+
+  //判断是否在缓存中，如果有则直接返回 
   if (entry)
     return entry;
 
+  //如果不在缓存中，则开始查找
   var exts;
+  // 当前加载的模块名称大于0位并且最后一位是 ／
   var trailingSlash = request.length > 0 &&
                       request.charCodeAt(request.length - 1) === 47/*/*/;
 
   // For each path
+  // 循环每一个可能的路径
   for (var i = 0; i < paths.length; i++) {
     // Don't search further if path doesn't exist
     const curPath = paths[i];
@@ -326,18 +342,33 @@ if (process.platform === 'win32') {
 // 'index.' character codes
 var indexChars = [ 105, 110, 100, 101, 120, 46 ];
 var indexLen = indexChars.length;
-Module._resolveLookupPaths = function(request, parent, newReturn) {
-  if (NativeModule.nonInternalExists(request)) {
-    debug('looking for %j in []', request);
+//用来查找模块，返回一个数组，数组第一项为模块名称即request，数组第二项返回一个可能包含这个模块的文件夹路径数组
+//
+//处理了如下几种情况：
+// 1、是原生模块且不是内部模块
+// 2、如果路径不以"./" 或者'..'开头或者只有一个字符串，即是引用模块名的方式，即require('moduleA'); 
+// 3、父亲模块为空的情况
+// 4、父亲模块是否为index模块，
+Module._resolveLookupPaths = function(request, parent, newReturn) { //request 当前加载的模块名称,parent 父亲模块
+
+  //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。
+  if (NativeModule.nonInternalExists(request)) { 
+    debug('looking for %j in []', request); 
+
+    //满足 是原生模块且不是内部模块，并且newReturn 为true，则返回null ，如果newReturn 为false 则返回［request, []］。
     return (newReturn ? null : [request, []]);
   }
 
   // Check for relative path
+  // 检查相关路径 
+  // 如果路径不以"./" 或者'..'开头或者只有一个字符串，即是引用模块名的方式，即require('moduleA');
   if (request.length < 2 ||
       request.charCodeAt(0) !== 46/*.*/ ||
       (request.charCodeAt(1) !== 46/*.*/ &&
        request.charCodeAt(1) !== 47/*/*/)) {
-    var paths = modulePaths;
+    var paths = modulePaths; //全局变量,在Module._initPaths 函数中赋值的变量,modulePaths记录了全局加载依赖的根目录
+
+    // 设置一下父亲的路径，其实就是谁导入了当前模块
     if (parent) {
       if (!parent.paths)
         paths = parent.paths = [];
@@ -347,6 +378,7 @@ Module._resolveLookupPaths = function(request, parent, newReturn) {
 
     // Maintain backwards compat with certain broken uses of require('.')
     // by putting the module's directory in front of the lookup paths.
+    // 如果只有一个字符串，且是 . 
     if (request === '.') {
       if (parent && parent.filename) {
         paths.unshift(path.dirname(parent.filename));
@@ -356,46 +388,60 @@ Module._resolveLookupPaths = function(request, parent, newReturn) {
     }
 
     debug('looking for %j in %j', request, paths);
+
+    //直接返回
     return (newReturn ? (paths.length > 0 ? paths : null) : [request, paths]);
   }
 
   // with --eval, parent.id is not set and parent.filename is null
+  // 处理父亲模块为空的情况
   if (!parent || !parent.id || !parent.filename) {
     // make require('./path/to/foo') work - normally the path is taken
     // from realpath(__filename) but with eval there is no filename
+    // 生成新的目录， 在系统目录 modulePaths，当前目录 和 "node_modules" 作为候选的路径
     var mainPaths = ['.'].concat(Module._nodeModulePaths('.'), modulePaths);
 
     debug('looking for %j in %j', request, mainPaths);
+    //直接返回
     return (newReturn ? mainPaths : [request, mainPaths]);
   }
 
   // Is the parent an index module?
   // We can assume the parent has a valid extension,
   // as it already has been accepted as a module.
-  const base = path.basename(parent.filename);
+  // 处理父亲模块是否为index模块，即 path/index.js 或者 X/index.json等 带有index字样的module
+  const base = path.basename(parent.filename); // path.basename()返回路径中的最后一部分
   var parentIdPath;
   if (base.length > indexLen) {
     var i = 0;
+
+    //检查 引入的模块名中是否有 "index." 字段，如果有, i === indexLen。
     for (; i < indexLen; ++i) {
       if (indexChars[i] !== base.charCodeAt(i))
         break;
     }
+
+    // 匹配 "index." 成功，查看是否有多余字段以及剩余部分的匹配情况
     if (i === indexLen) {
       // We matched 'index.', let's validate the rest
       for (; i < base.length; ++i) {
         const code = base.charCodeAt(i);
+
+        // 如果模块名中有  除了 _, 0-9,A-Z,a-z 的字符 则跳出循环
         if (code !== 95/*_*/ &&
             (code < 48/*0*/ || code > 57/*9*/) &&
             (code < 65/*A*/ || code > 90/*Z*/) &&
             (code < 97/*a*/ || code > 122/*z*/))
           break;
       }
+
+
       if (i === base.length) {
         // Is an index module
         parentIdPath = parent.id;
       } else {
         // Not an index module
-        parentIdPath = path.dirname(parent.id);
+        parentIdPath = path.dirname(parent.id); //path.dirname() 返回路径中代表文件夹的部分
       }
     } else {
       // Not an index module
@@ -405,10 +451,13 @@ Module._resolveLookupPaths = function(request, parent, newReturn) {
     // Not an index module
     parentIdPath = path.dirname(parent.id);
   }
-  var id = path.resolve(parentIdPath, request);
+
+  //拼出绝对路径
+  var id = path.resolve(parentIdPath, request);  //path.resolve([from ...], to) 将 to 参数解析为绝对路径。eg:path.resolve('/foo/bar', './baz')   输出'/foo/bar/baz'
 
   // make sure require('./path') and require('path') get distinct ids, even
   // when called from the toplevel js file
+  // 确保require('./path')和require('path')两种形式的，获得不同的 ids
   if (parentIdPath === '.' && id.indexOf('/') === -1) {
     id = './' + id;
   }
@@ -416,8 +465,10 @@ Module._resolveLookupPaths = function(request, parent, newReturn) {
   debug('RELATIVE: requested: %s set ID to: %s from %s', request, id,
         parent.id);
 
-  var parentDir = [path.dirname(parent.filename)];
+  var parentDir = [path.dirname(parent.filename)]; //path.dirname() 返回路径中代表文件夹的部分
   debug('looking for %j in %j', id, parentDir);
+
+  // 当我们以"./" 等方式require时，都是以当前父模块为对象路径的
   return (newReturn ? parentDir : [id, parentDir]);
 };
 
@@ -438,6 +489,8 @@ Module._load = function(request, parent, isMain) { //_load函数三个参数： 
     debug('Module._load REQUEST %s parent: %s', request, parent.id); //头部引入了 Module._debug = util.debuglog('module');const debug = Module._debug;  这个方法用来打印出调试信息,具体可以看 https://chyingp.gitbooks.io/nodejs/%E6%A8%A1%E5%9D%97/util.html
   }
 
+
+  //
   var filename = Module._resolveFilename(request, parent, isMain);
 
   var cachedModule = Module._cache[filename];
@@ -491,19 +544,26 @@ function getInspectorCallWrapper() {
 
 Module._resolveFilename = function(request, parent, isMain) { //request 当前加载的模块名称,parent 父亲模块，/* isMain */ false  是不是主入口文件
 
-  if (NativeModule.nonInternalExists(request)) { //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。满足 是原生模块且不是内部模块,则直接返回 当前加载的模块名称request。
+  //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。满足 是原生模块且不是内部模块,则直接返回 当前加载的模块名称request。
+  if (NativeModule.nonInternalExists(request)) { 
     return request;
   }
 
+  // Module._resolveLookupPaths()函数返回一个数组[id , paths], paths是一个 可能 包含这个模块的文件夹路径(绝对路径)数组
   var paths = Module._resolveLookupPaths(request, parent, true);
 
   // look up the filename first, since that's the cache key.
+  // 确定哪一个路径为真，缓存机制 
   var filename = Module._findPath(request, paths, isMain);
+
+  // 如果没有找到模块，报错
   if (!filename) {
     var err = new Error(`Cannot find module '${request}'`);
     err.code = 'MODULE_NOT_FOUND';
     throw err;
   }
+
+  // 找到模块则直接返回
   return filename;
 };
 
@@ -528,7 +588,7 @@ Module.prototype.load = function(filename) {
 Module.prototype.require = function(path) {
   assert(path, 'missing path');  //断言是否有path
   assert(typeof path === 'string', 'path must be a string'); //断言 path是否是个字符串
-  return Module._load(path, this, /* isMain */ false);  //require方法主要是为了引出_load方法。_load函数三个参数： path 当前加载的模块名称,parent 父亲模块，/* isMain */ false  是不是主入口文件
+  return Module._load(path, this, /* isMain */ false);  //require方法主要是为了引出_load方法。_load函数三个参数： path 当前加载的模块名称,parent 父亲模块，其实是谁导入了该模块，/* isMain */ false  是不是主入口文件
 };
 
 
@@ -650,7 +710,8 @@ Module.runMain = function() {
   process._tickCallback();
 };
 
-Module._initPaths = function() {
+// 初始化全局的依赖加载路径 ，定义之后直接调用了。
+Module._initPaths = function() {  
   const isWindows = process.platform === 'win32';
 
   var homeDir;
@@ -676,13 +737,18 @@ Module._initPaths = function() {
     paths.unshift(path.resolve(homeDir, '.node_modules'));
   }
 
+  //获取环境变量“NODE_PATH”
   var nodePath = process.env['NODE_PATH'];
   if (nodePath) {
     paths = nodePath.split(path.delimiter).filter(function(path) {
       return !!path;
     }).concat(paths);
   }
-
+  // modulePaths记录了全局加载依赖的根目录,全局变量
+  //   modulePaths = Module.globalPaths :
+      // 1: $HOME/.node_modules
+      // 2: $HOME/.node_libraries
+      // 3: $PREFIX/lib/node
   modulePaths = paths;
 
   // clone as a shallow copy, for introspection.

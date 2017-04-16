@@ -74,12 +74,21 @@ function Module(id, parent) {
 }
 module.exports = Module;
 
-Module._cache = Object.create(null);
+Module._cache = Object.create(null);  //存放所有被 load 后的模块 id。
 Module._pathCache = Object.create(null);
 Module._extensions = Object.create(null);
 var modulePaths = [];
 Module.globalPaths = [];
 
+
+// NativeModule.wrap = function(script) {
+//     return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
+//   };
+
+//   NativeModule.wrapper = [
+//     '(function (exports, require, module, __filename, __dirname) { ',
+//     '\n});'
+//   ];
 Module.wrapper = NativeModule.wrapper;
 Module.wrap = NativeModule.wrap;
 Module._debug = util.debuglog('module'); //这个方法用来打印出调试信息,具体可以看 https://chyingp.gitbooks.io/nodejs/%E6%A8%A1%E5%9D%97/util.html
@@ -666,10 +675,14 @@ var resolvedArgv;
 // the correct helper variables (require, module, exports) to
 // the file.
 // Returns exception, if any.
+// 此方法用于模块的编译。
+// content 主要是js文件的主要内容,filename 是js文件的文件名
 Module.prototype._compile = function(content, filename) {
   // Remove shebang
+  // Shebang（也称为 Hashbang ）是一个由井号和叹号构成的字符序列 #!
   var contLen = content.length;
   if (contLen >= 2) {
+    // 如果content 开头有Shebang
     if (content.charCodeAt(0) === 35/*#*/ &&
         content.charCodeAt(1) === 33/*!*/) {
       if (contLen === 2) {
@@ -677,6 +690,7 @@ Module.prototype._compile = function(content, filename) {
         content = '';
       } else {
         // Find end of shebang line and slice it off
+        // 找到以shebang开头的句子的结尾，并将其分开,留下剩余部分
         var i = 2;
         for (; i < contLen; ++i) {
           var code = content.charCodeAt(i);

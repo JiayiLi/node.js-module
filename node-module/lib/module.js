@@ -22,13 +22,13 @@
 'use strict';
 
 const NativeModule = require('native_module'); //用于管理js模块，实现位于lib/internal/bootstrap_node.js中
-const util = require('util');
-const internalModule = require('internal/module');
-const vm = require('vm');
+const util = require('util'); //util 模块主要用于支持 Node.js 内部 API 的需求。 大部分实用工具也可用于应用程序与模块开发者。
+const internalModule = require('internal/module'); //内部module模块也就是核心模块module
+const vm = require('vm'); //vm 模块提供了一系列 API 用于在 V8 虚拟机环境中编译和运行代码。
 const assert = require('assert').ok; //主要用于断言，如果表达式不符合预期，就抛出一个错误。assert方法接受两个参数，当第一个参数对应的布尔值为true时，不会有任何提示，返回undefined。当第一个参数对应的布尔值为false时，会抛出一个错误，该错误的提示信息就是第二个参数设定的字符串。ok是assert方法的另一个名字，与assert方法完全一样。
 const fs = require('fs'); //fs是filesystem的缩写，该模块提供本地文件的读写能力，基本上是POSIX文件操作命令的简单包装。但是，这个模块几乎对所有操作提供异步和同步两种操作方式，供开发者选择。
-const internalFS = require('internal/fs'); //内部fs模块
-const path = require('path');
+const internalFS = require('internal/fs'); //内部fs模块即核心模块fs
+const path = require('path'); //path 模块提供了一些工具函数，用于处理文件与目录的路径。
 
 //Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。 感兴趣了解 https://book.douban.com/reading/29343610/
 const internalModuleReadFile = process.binding('fs').internalModuleReadFile; // 读取文件内容
@@ -59,7 +59,7 @@ function stat(filename) { //filename:路径
 }
 stat.cache = null;
 
-
+// 这是Module的构造函数，所有的模块都是 Module 的实例。可以看到，当前模块（module.js）也是 Module 的一个实例。
 function Module(id, parent) {
   this.id = id;
   this.exports = {};
@@ -80,15 +80,20 @@ Module._extensions = Object.create(null);
 var modulePaths = [];
 Module.globalPaths = [];
 
-
+//Module.wrapper和Module.wrap的方法写在下面，很简单，不难看出其实就是给传入进去的script也就是咱们的content --js文件内容套了一个壳，使其最后变成类似于如下的样子：
+//
+//(function (exports, require, module, __filename, __dirname) {
+//         －－－－－模块源码－－－－－
+// });
+//
 // NativeModule.wrap = function(script) {
 //     return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
-//   };
+// };
 
-//   NativeModule.wrapper = [
+// NativeModule.wrapper = [
 //     '(function (exports, require, module, __filename, __dirname) { ',
 //     '\n});'
-//   ];
+// ];
 Module.wrapper = NativeModule.wrapper;
 Module.wrap = NativeModule.wrap;
 Module._debug = util.debuglog('module'); //这个方法用来打印出调试信息,具体可以看 https://chyingp.gitbooks.io/nodejs/%E6%A8%A1%E5%9D%97/util.html
@@ -109,28 +114,34 @@ const debug = Module._debug;
 //   -> a/index.<ext>
 
 // check if the directory is a package.json dir
+// 用于缓存读取过的package.json文件
 const packageMainCache = Object.create(null);
-
 // 获得package.json文件
 function readPackage(requestPath) {
+  // 查看是否在缓存中，如果在缓存中 直接返回
   const entry = packageMainCache[requestPath];
   if (entry)
     return entry;
 
+  // 获得package.json所在的绝对路径
   const jsonPath = path.resolve(requestPath, 'package.json');
+  // 读取文件内容
   const json = internalModuleReadFile(path._makeLong(jsonPath));
 
+  // 如果没有读取到内容则返回false
   if (json === undefined) {
     return false;
   }
 
   try {
+    // 检查package.json文件是否存在main属性 main属性指定了加载的入口文件 eg:"main": "./lib/index",
     var pkg = packageMainCache[requestPath] = JSON.parse(json).main;
   } catch (e) {
     e.path = jsonPath;
     e.message = 'Error parsing ' + jsonPath + ': ' + e.message;
     throw e;
   }
+
   return pkg;
 }
 
@@ -138,12 +149,16 @@ function readPackage(requestPath) {
 function tryPackage(requestPath, exts, isMain) {
   var pkg = readPackage(requestPath);
 
+  // 如果没有得到package.json文件main属性 则返回false
   if (!pkg) return false;
 
+  // 生成绝对路径
   var filename = path.resolve(requestPath, pkg);
-  return tryFile(filename, isMain) ||
-         tryExtensions(filename, exts, isMain) ||
-         tryExtensions(path.resolve(filename, 'index'), exts, isMain);
+
+
+  return tryFile(filename, isMain) ||  //判断路径是否存在
+         tryExtensions(filename, exts, isMain) || //检查文件加上js node json后缀是否存在
+         tryExtensions(path.resolve(filename, 'index'), exts, isMain); //加上index 检查文件加上js node json后缀是否存在 即 index.js index.node index.json是否存在
 }
 
 // In order to minimize unnecessary lstat() calls,
@@ -160,6 +175,8 @@ const realpathCache = new Map();
 // 否则解析为绝对实际路径
 function tryFile(requestPath, isMain) {
   const rc = stat(requestPath);
+
+  // rc ===0 是文件\
   if (preserveSymlinks && !isMain) {
     return rc === 0 && path.resolve(requestPath);
   }
@@ -167,7 +184,7 @@ function tryFile(requestPath, isMain) {
 }
 
 
-// fs.realpathSync()用来获取当前执行js文件的真实路径
+// fs.realpathSync()用来获取当前执行文件的真实路径
 function toRealPath(requestPath) {
   return fs.realpathSync(requestPath, {
     [internalFS.realpathCacheKey]: realpathCache
@@ -188,7 +205,9 @@ function tryExtensions(p, exts, isMain) {
 }
 
 var warned = false;
-Module._findPath = function(request, paths, isMain) {//request 当前加载的模块名称,paths Module._resolveLookupPaths()函数返回一个数组[id , paths],即模块可能在的所有路径，/* isMain */ false  是不是主入口文件
+//_findPath用于从可能的路径中确定哪一个路径为真，并且添加到缓存中 
+//参数request 当前加载的模块名称,paths ，Module._resolveLookupPaths()函数返回一个数组[id , paths],即模块可能在的所有路径，/* isMain */ false  是不是主入口文件
+Module._findPath = function(request, paths, isMain) {
 
   //path.isAbsolute()判断参数 path 是否是绝对路径。
   if (path.isAbsolute(request)) {  
@@ -213,7 +232,7 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
                       request.charCodeAt(request.length - 1) === 47/*/*/;
 
   // For each path
-  // 循环每一个可能的路径
+  // 循环每一个可能的路径paths
   for (var i = 0; i < paths.length; i++) {
 
     // Don't search further if path doesn't exist
@@ -225,20 +244,23 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
 
     //stat 头部定义的函数，用来获取路径状态，判断路径类型，是文件还是文件夹
     var rc = stat(basePath); 
-    //如果没有后缀的目录斜杠
+    //如果没有后缀的目录斜杠，那么就有可能是文件或者是文件夹名
     if (!trailingSlash) {
-      if (rc === 0) {  // File. // 若是文件
+      // 若是文件
+      if (rc === 0) {  // File.
 
         // 如果是使用模块的符号路径而不是真实路径，并且不是主入口文件
         if (preserveSymlinks && !isMain) {  
           filename = path.resolve(basePath);
         } else {
-          filename = toRealPath(basePath);
+          filename = toRealPath(basePath); //获取当前执行文件的真实路径
         }
 
-      } else if (rc === 1) {  // Directory. // 若是目录
+      // 若是目录
+      } else if (rc === 1) {  // Directory. 
         if (exts === undefined)
           //目录中是否存在 package.json 
+          //通过package.json文件,返回相应路径
           exts = Object.keys(Module._extensions);
         filename = tryPackage(basePath, exts, isMain);
       }
@@ -257,6 +279,7 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
     if (!filename && rc === 1) {  // Directory.
       if (exts === undefined)
         // 目录中是否存在 package.json 
+        // 通过package.json文件,返回相应路径
         exts = Object.keys(Module._extensions);
       filename = tryPackage(basePath, exts, isMain);
     }
@@ -295,16 +318,31 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
 
   // 所以从这里可以看出，对于具体的文件的优先级：
   // 1. 具体文件。
-  // 2. package.json
-  // 3. 加上后缀。
+  // 2. 加上后缀。
+  // 3. package.json
   // 4  index加上后缀
-  // 候选路径以当前文件夹，nodejs系统文件夹和node_module中的文件夹为候选，以上述顺序找到任意一个，
+  // 可能的路径以当前文件夹，nodejs系统文件夹和node_module中的文件夹为候选，以上述顺序找到任意一个，
   // 就直接返回
 
   // 没有找到文件，返回false 
   return false;
 };
 
+
+//path 模块的默认操作会根据 Node.js 应用程序运行的操作系统的不同而变化。 比如，当运行在 Windows 操作系统上时，path 模块会认为使用的是 Windows 风格的路径。例如，对 Windows 文件路径 C:\temp\myfile.html 使用 path.basename() 函数，运行在 POSIX 上与运行在 Windows 上会产生不同的结果：
+//在 POSIX 上:
+//path.basename('C:\\temp\\myfile.html');
+// 返回: 'C:\\temp\\myfile.html'
+// 
+// 在 Windows 上:
+//path.basename('C:\\temp\\myfile.html');
+// 返回: 'myfile.html'
+// 
+// 一下就是根据不同的操作系统返回不同的路径格式 ，具体可以了解http://nodejs.cn/api/path.html
+// 
+// 
+// 
+// Module._nodeModulePaths主要决定paths参数的值的方法。
 // 'node_modules' character codes reversed
 var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
 var nmLen = nmChars.length;
@@ -710,8 +748,13 @@ Module.prototype._compile = function(content, filename) {
   }
 
   // create wrapper function
+  // Module.wrap头部引入，主要用来给content内容包装头尾，类似于
+//   (function (exports, require, module, __filename, __dirname) {
+//         －－－－－模块源码 content－－－－－
+//    });
   var wrapper = Module.wrap(content);
 
+// 包装好的文本就可以送到vm中执行了，这部分就应该是v8引擎的事情,runInThisContext将被包装后的源字符串转成可执行函数,runInThisContext的作用，类似eval
   var compiledWrapper = vm.runInThisContext(wrapper, {
     filename: filename,
     lineOffset: 0,
@@ -719,6 +762,7 @@ Module.prototype._compile = function(content, filename) {
   });
 
   var inspectorWrapper = null;
+  // 处理debug模式，
   if (process._debugWaitConnect && process._eval == null) {
     if (!resolvedArgv) {
       // we enter the repl if we're not given a filename argument.
@@ -739,11 +783,25 @@ Module.prototype._compile = function(content, filename) {
       }
     }
   }
+
+  // 获取当前的文件的路径
   var dirname = path.dirname(filename);
+
+  //生成require方法
   var require = internalModule.makeRequireFunction(this);
+
+  //依赖模块
   var depth = internalModule.requireDepth;
   if (depth === 0) stat.cache = new Map();
   var result;
+
+  //直接调用content经过包装后的wrapper函数，将module模块中的exports，生成的require， 
+  //this也就是新创建的module，filename, dirname作为参数传递给模块
+  //类似于
+  //(function (exports, require, module, __filename, __dirname) {
+//       －－－－－模块源码 content－－－－－
+//  })(this.exports, require, this,filename, dirname);
+  // 这就是为什么我们可以直接在module文件中，直接访问exports, module, require函数的原因
   if (inspectorWrapper) {
     result = inspectorWrapper(compiledWrapper, this.exports, this.exports,
                               require, this, filename, dirname);

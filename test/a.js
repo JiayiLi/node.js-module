@@ -19,3 +19,8 @@ console.log('module.filename: ', module.filename);
 console.log('module.loaded: ', module.loaded);
 console.log('module.children: ', module.children);
 console.log('module.paths: ', module.paths);
+
+
+(function(){
+
+})()

@@ -102,6 +102,7 @@ const debug = Module._debug;
 // check if the directory is a package.json dir
 const packageMainCache = Object.create(null);
 
+// 获得package.json文件
 function readPackage(requestPath) {
   const entry = packageMainCache[requestPath];
   if (entry)
@@ -124,7 +125,7 @@ function readPackage(requestPath) {
   return pkg;
 }
 
-// 读取package.json文件,返回路径
+// 通过package.json文件,返回相应路径
 function tryPackage(requestPath, exts, isMain) {
   var pkg = readPackage(requestPath);
 
@@ -165,7 +166,7 @@ function toRealPath(requestPath) {
 }
 
 // given a path check a the file exists with any of the set extensions
-// 给定一个路径，检查文件是否存在任何一个扩展名
+// 给定一个路径，检查文件加上js node json后缀是否存在
 function tryExtensions(p, exts, isMain) {
   for (var i = 0; i < exts.length; i++) {
     const filename = tryFile(p + exts[i], isMain);
@@ -215,6 +216,7 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
 
     //stat 头部定义的函数，用来获取路径状态，判断路径类型，是文件还是文件夹
     var rc = stat(basePath); 
+    //如果没有后缀的目录斜杠
     if (!trailingSlash) {
       if (rc === 0) {  // File. // 若是文件
 
@@ -242,6 +244,7 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
       }
     }
 
+    // 如果仍然没有得到filename，并且路径类型是文件夹
     if (!filename && rc === 1) {  // Directory.
       if (exts === undefined)
         // 目录中是否存在 package.json 
@@ -249,14 +252,18 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
       filename = tryPackage(basePath, exts, isMain);
     }
 
+    // 如果仍然没有得到filename，并且路径类型是文件夹
     if (!filename && rc === 1) {  // Directory.
       // try it with each of the extensions at "index"
       // 是否存在目录名 + index + 后缀名
       // 尝试 index.js index.json index.node
       if (exts === undefined)
         exts = Object.keys(Module._extensions);
+
+      //tryExtensions()头部定义方法，用来检查文件加上js node json后缀是否存在
       filename = tryExtensions(path.resolve(basePath, 'index'), exts, isMain);
     }
+
 
     if (filename) {
       // Warn once if '.' resolved outside the module dir
@@ -279,8 +286,8 @@ Module._findPath = function(request, paths, isMain) {//request 当前加载的�
 
   // 所以从这里可以看出，对于具体的文件的优先级：
   // 1. 具体文件。
-  // 2. 加上后缀。
-  // 3. package.json
+  // 2. package.json
+  // 3. 加上后缀。
   // 4  index加上后缀
   // 候选路径以当前文件夹，nodejs系统文件夹和node_module中的文件夹为候选，以上述顺序找到任意一个，
   // 就直接返回
@@ -524,37 +531,49 @@ Module._load = function(request, parent, isMain) { //_load函数三个参数： 
     debug('Module._load REQUEST %s parent: %s', request, parent.id); //头部引入了 Module._debug = util.debuglog('module');const debug = Module._debug;  这个方法用来打印出调试信息,具体可以看 https://chyingp.gitbooks.io/nodejs/%E6%A8%A1%E5%9D%97/util.html
   }
 
-
-  //
+  // 找到当前的需要解析的文件名
   var filename = Module._resolveFilename(request, parent, isMain);
 
+  //如果已经有的缓存，直接返回缓存的exports
   var cachedModule = Module._cache[filename];
   if (cachedModule) {
     return cachedModule.exports;
   }
 
+  //如果模块是一个内部模块，调用内部方法'NativeModule.require()'方法，filename作为参数，并返回结果
   if (NativeModule.nonInternalExists(filename)) {
     debug('load native module %s', request);
     return NativeModule.require(filename);
   }
 
+  //创建一个新模块
   var module = new Module(filename, parent);
 
+  //是否为主模块，
   if (isMain) {
+    //主模块的话，需要将当前的module赋值给process.mainModule
     process.mainModule = module;
+    //主模块的id特殊的赋值为"."
     module.id = '.';
   }
 
+  //并把新模块加入缓存中
   Module._cache[filename] = module;
 
+  //尝试导入模块的操作
   tryModuleLoad(module, filename);
 
+  // 返回新创建模块的exports,确保是否有异常
   return module.exports;
 };
 
 function tryModuleLoad(module, filename) {
   var threw = true;
+
+  //try catch一下，如果装载失败，就会从cache中将这个模块删除。
   try {
+
+    //做真正的导入模块的操作
     module.load(filename);
     threw = false;
   } finally {
@@ -577,6 +596,7 @@ function getInspectorCallWrapper() {
   return wrapper;
 }
 
+// 负责具体filename的文件查找
 Module._resolveFilename = function(request, parent, isMain) { //request 当前加载的模块名称,parent 父亲模块，/* isMain */ false  是不是主入口文件
 
   //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。满足 是原生模块且不是内部模块,则直接返回 当前加载的模块名称request。
@@ -588,7 +608,7 @@ Module._resolveFilename = function(request, parent, isMain) { //request 当前�
   var paths = Module._resolveLookupPaths(request, parent, true);
 
   // look up the filename first, since that's the cache key.
-  // 确定哪一个路径为真，缓存机制 
+  // 确定哪一个路径为真，并且添加到缓存中
   var filename = Module._findPath(request, paths, isMain);
 
   // 如果没有找到模块，报错
@@ -604,15 +624,25 @@ Module._resolveFilename = function(request, parent, isMain) { //request 当前�
 
 
 // Given a file name, pass it to the proper extension handler.
+// 指定一个文件名，导入模块，调用适当扩展处理函数，当前主要是js，json，和node
 Module.prototype.load = function(filename) {
   debug('load %j for module %j', filename, this.id);
 
-  assert(!this.loaded);
-  this.filename = filename;
+  assert(!this.loaded); //断言 确保当前模块没有被载入
+  this.filename = filename; // 赋值当前模块的文件名
+
+  //当前的path ,
+  // path.dirname() 方法返回一个 path 的目录名 path.dirname('/foo/bar/baz/asdf/quux')
+  // 返回: '/foo/bar/baz/asdf'
   this.paths = Module._nodeModulePaths(path.dirname(filename));
 
+  //当前文件的后缀
   var extension = path.extname(filename) || '.js';
+
+  //如果没有后缀，默认为 .js
   if (!Module._extensions[extension]) extension = '.js';
+
+  //根据不同的后缀，执行不同的函数
   Module._extensions[extension](this, filename);
   this.loaded = true;
 };
@@ -722,7 +752,7 @@ Module._extensions['.js'] = function(module, filename) {
   // 同步读取文件
   var content = fs.readFileSync(filename, 'utf8');
 
-  // 通过module._compile解释执行
+  // internalModule.stripBOM（）剥离 utf8 编码特有的BOM文件头，然后通过module._compile解释执行
   module._compile(internalModule.stripBOM(content), filename);
 };
 
@@ -732,7 +762,7 @@ Module._extensions['.json'] = function(module, filename) {
   // 同步的读入文件的内容
   var content = fs.readFileSync(filename, 'utf8');
   try {
-    // 直接将模块的exports赋值为json文件的内容
+    // internalModule.stripBOM（）剥离 utf8 编码特有的BOM文件头，然后将模块的exports赋值为json文件的内容
     module.exports = JSON.parse(internalModule.stripBOM(content));
   } catch (err) {
     // 异常处理
@@ -744,6 +774,7 @@ Module._extensions['.json'] = function(module, filename) {
 
 //Native extension for .node
 Module._extensions['.node'] = function(module, filename) {
+  // 对于.node文件的打开处理，通常为C/C++文件。
   return process.dlopen(module, path._makeLong(filename));
 };
 

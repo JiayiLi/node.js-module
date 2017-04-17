@@ -85,7 +85,7 @@ Module.globalPaths = [];
 //(function (exports, require, module, __filename, __dirname) {
 //         －－－－－模块源码－－－－－
 // });
-//
+// 
 // NativeModule.wrap = function(script) {
 //     return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
 // };
@@ -116,7 +116,7 @@ const debug = Module._debug;
 // check if the directory is a package.json dir
 // 用于缓存读取过的package.json文件
 const packageMainCache = Object.create(null);
-// 获得package.json文件
+// readPackage()获得package.json文件,读取main属性获得路径
 function readPackage(requestPath) {
   // 查看是否在缓存中，如果在缓存中 直接返回
   const entry = packageMainCache[requestPath];
@@ -134,7 +134,7 @@ function readPackage(requestPath) {
   }
 
   try {
-    // 检查package.json文件是否存在main属性 main属性指定了加载的入口文件 eg:"main": "./lib/index",
+    // 检查package.json文件是否存在main属性 main属性指定了模块加载的入口文件 eg:"main": "./lib/index",
     var pkg = packageMainCache[requestPath] = JSON.parse(json).main;
   } catch (e) {
     e.path = jsonPath;

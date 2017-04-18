@@ -30,7 +30,9 @@ const fs = require('fs'); //fs是filesystem的缩写，该模块提供本地文�
 const internalFS = require('internal/fs'); //内部fs模块即核心模块fs
 const path = require('path'); //path 模块提供了一些工具函数，用于处理文件与目录的路径。
 
-//Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。 感兴趣了解 https://book.douban.com/reading/29343610/
+//Node在启动时，会生成一个全局变量process，并提供Binding()方法来协助加载内建模块。
+//process 对象是一个 global （全局变量），提供有关信息，控制当前 Node.js 进程。作为一个对象，它对于 Node.js 应用程序始终是可用的，故无需使用 require()。
+//可通过http://nodejs.cn/api/process.html 了解 process
 const internalModuleReadFile = process.binding('fs').internalModuleReadFile; // 读取文件内容
 const internalModuleStat = process.binding('fs').internalModuleStat; //判断是文件夹还是文件  以及是否存在,可以查看 http://yanglimei.com/2016/09/21/nodemodulerewrite.html
 const preserveSymlinks = !!process.binding('config').preserveSymlinks;
@@ -134,7 +136,7 @@ function readPackage(requestPath) {
   }
 
   try {
-    // 检查package.json文件是否存在main属性 main属性指定了模块加载的入口文件 eg:"main": "./lib/index",
+    // 检查package.json文件是否存在main属性 main属性指定了模块加载的入口文件 eg:"main": "./lib/index"
     var pkg = packageMainCache[requestPath] = JSON.parse(json).main;
   } catch (e) {
     e.path = jsonPath;
@@ -176,7 +178,7 @@ const realpathCache = new Map();
 function tryFile(requestPath, isMain) {
   const rc = stat(requestPath);
 
-  // rc ===0 是文件\
+  // rc === 0 是文件
   if (preserveSymlinks && !isMain) {
     return rc === 0 && path.resolve(requestPath);
   }
@@ -338,11 +340,10 @@ Module._findPath = function(request, paths, isMain) {
 //path.basename('C:\\temp\\myfile.html');
 // 返回: 'myfile.html'
 // 
-// 一下就是根据不同的操作系统返回不同的路径格式 ，具体可以了解http://nodejs.cn/api/path.html
+// 以下就是根据不同的操作系统返回不同的路径格式 ，具体可以了解http://nodejs.cn/api/path.html
 // 
 // 
-// 
-// Module._nodeModulePaths主要决定paths参数的值的方法。
+// Module._nodeModulePaths主要决定paths参数的值的方法。获取node_modules文件夹所在路径
 // 'node_modules' character codes reversed
 var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
 var nmLen = nmChars.length;
@@ -516,7 +517,7 @@ Module._resolveLookupPaths = function(request, parent, newReturn) { //request �
       for (; i < base.length; ++i) {
         const code = base.charCodeAt(i);
 
-        // 如果模块名中有  除了 _, 0-9,A-Z,a-z 的字符 则跳出循环
+        // 如果模块名中有  除了 _, 0-9,A-Z,a-z 的字符 则跳出，继续下一次循环
         if (code !== 95/*_*/ &&
             (code < 48/*0*/ || code > 57/*9*/) &&
             (code < 65/*A*/ || code > 90/*Z*/) &&
@@ -555,6 +556,7 @@ Module._resolveLookupPaths = function(request, parent, newReturn) { //request �
         parent.id);
 
   var parentDir = [path.dirname(parent.filename)]; //path.dirname() 返回路径中代表文件夹的部分
+
   debug('looking for %j in %j', id, parentDir);
 
   // 当我们以"./" 等方式require时，都是以当前父模块为对象路径的
@@ -714,10 +716,10 @@ var resolvedArgv;
 // the file.
 // Returns exception, if any.
 // 此方法用于模块的编译。
-// content 主要是js文件的主要内容,filename 是js文件的文件名
+// 参数content 主要是js文件的主要内容,filename 是js文件的文件名
 Module.prototype._compile = function(content, filename) {
   // Remove shebang
-  // Shebang（也称为 Hashbang ）是一个由井号和叹号构成的字符序列 #!
+  // Shebang（也称为 Hashbang ）是一个由井号和叹号构成的字符序列 #! 
   var contLen = content.length;
   if (contLen >= 2) {
     // 如果content 开头有Shebang
@@ -728,7 +730,7 @@ Module.prototype._compile = function(content, filename) {
         content = '';
       } else {
         // Find end of shebang line and slice it off
-        // 找到以shebang开头的句子的结尾，并将其分开,留下剩余部分
+        // 找到以shebang开头的句子的结尾，并将其分开,留下剩余部分 赋值给content
         var i = 2;
         for (; i < contLen; ++i) {
           var code = content.charCodeAt(i);
@@ -854,6 +856,13 @@ Module._extensions['.node'] = function(module, filename) {
 // bootstrap main module.
 Module.runMain = function() {
   // Load the main module--the command line argument.
+  // 当你执行 node test.js 的时候，process.argv[1]指的是/path/to/test.js 绝对路径，第三个参数为 true ，这个文件将会作为主文件入口
+  // process.argv 例子 输入node process-2.js one two=three four 
+  // process.argv[0] /usr/local/bin/node
+  // process.argv[1] /Users/mjr/work/node/process-2.js
+  // process.argv[2] one
+  // process.argv[3] two=three
+  // process.argv[4] four
   Module._load(process.argv[1], null, true);
   // Handle any nextTicks added in the first tick of the program
   process._tickCallback();

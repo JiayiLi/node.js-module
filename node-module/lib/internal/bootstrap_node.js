@@ -528,7 +528,6 @@
     };
   }
 
-
   NativeModule.getSource = function(id) {
     return NativeModule._source[id];
   };

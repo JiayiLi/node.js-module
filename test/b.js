@@ -1,16 +1,3 @@
-// function Module(id, parent) {
-//   this.id = id;
-//   this.exports = {};
-//   this.parent = parent;
-//   this.filename = null;
-//   this.loaded = false;
-//   this.children = [];
-// }
-
-// module.exports = Module;
-
-// var module = new Module(filename, parent);
-
 // module
 console.log('module.id: ', module.id);
 console.log('module.exports: ', module.exports);
@@ -22,8 +9,8 @@ console.log('module.paths: ', module.paths);
 
 
 (function(){
-	var fs = require('fs');
-	console.log(fs);
+	var a = require('./a.js');
+	console.log(a);
 
 
 

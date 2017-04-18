@@ -10,6 +10,7 @@ console.log('module.paths: ', module.paths);
 
 (function(){
 	var a = require('./a.js');
+	console.log(a.name);
 	console.log(a);
 
 

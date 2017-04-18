@@ -26,5 +26,10 @@ console.log('module.paths: ', module.paths);
 	console.log(fs);
 
 
+	var t={
+		name:"ll"
+	};
+
+	module.exports = t;
 
 })()

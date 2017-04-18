@@ -343,7 +343,7 @@ Module._findPath = function(request, paths, isMain) {
 // 以下就是根据不同的操作系统返回不同的路径格式 ，具体可以了解http://nodejs.cn/api/path.html
 // 
 // 
-// Module._nodeModulePaths主要决定paths参数的值的方法。获取node_modules文件夹所在路径
+// Module._nodeModulePaths主要决定paths参数的值的方法。获取node_modules文件夹所在路径。
 // 'node_modules' character codes reversed
 var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
 var nmLen = nmChars.length;
@@ -612,7 +612,7 @@ Module._load = function(request, parent, isMain) { //_load函数三个参数： 
   //尝试导入模块的操作
   tryModuleLoad(module, filename);
 
-  // 返回新创建模块的exports,确保是否有异常
+  // 返回新创建模块中的exports,也就是暴露在外面的方法属性等。
   return module.exports;
 };
 
@@ -680,7 +680,7 @@ Module.prototype.load = function(filename) {
   assert(!this.loaded); //断言 确保当前模块没有被载入
   this.filename = filename; // 赋值当前模块的文件名
 
-  //当前的path ,
+  // Module._nodeModulePaths主要决定paths参数的值的方法。获取node_modules文件夹所在路径。
   // path.dirname() 方法返回一个 path 的目录名 path.dirname('/foo/bar/baz/asdf/quux')
   // 返回: '/foo/bar/baz/asdf'
   this.paths = Module._nodeModulePaths(path.dirname(filename));
@@ -699,9 +699,12 @@ Module.prototype.load = function(filename) {
 
 // Loads a module at the given file path. Returns that module's
 // `exports` property.
+// 给定一个模块目录，返回该模块的 exports 属性
 Module.prototype.require = function(path) {
+  // assert() 头部引入，主要用于断言，如果表达式不符合预期，就抛出一个错误。assert方法接受两个参数，当第一个参数对应的布尔值为true时，不会有任何提示，返回undefined。当第一个参数对应的布尔值为false时，会抛出一个错误，该错误的提示信息就是第二个参数设定的字符串。
   assert(path, 'missing path');  //断言是否有path
   assert(typeof path === 'string', 'path must be a string'); //断言 path是否是个字符串
+  
   return Module._load(path, this, /* isMain */ false);  //require方法主要是为了引出_load方法。_load函数三个参数： path 当前加载的模块名称,parent 父亲模块，其实是谁导入了该模块，/* isMain */ false  是不是主入口文件
 };
 
@@ -709,8 +712,6 @@ Module.prototype.require = function(path) {
 // Resolved path to process.argv[1] will be lazily placed here
 // (needed for setting breakpoint when called with --debug-brk)
 var resolvedArgv;
-
-
 // Run the file contents in the correct scope or sandbox. Expose
 // the correct helper variables (require, module, exports) to
 // the file.
@@ -820,7 +821,6 @@ Module.prototype._compile = function(content, filename) {
 // 对于.js的文件会，先同步读取文件，然后通过module._compile解释执行。
 // 对于.json文件的处理，先同步的读入文件的内容，无异常的话直接将模块的exports赋值为json文件的内容 
 // 对于.node文件的打开处理，通常为C/C++文件。
-
 // Native extension for .js
 Module._extensions['.js'] = function(module, filename) {
   // 同步读取文件

@@ -437,8 +437,9 @@ var indexLen = indexChars.length;
 //处理了如下几种情况：
 // 1、是原生模块且不是内部模块
 // 2、如果路径不以"./" 或者'..'开头或者只有一个字符串，即是引用模块名的方式，即require('moduleA'); 
-// 3、父亲模块为空的情况
-// 4、父亲模块是否为index模块，
+//    2.1以 '/' 为前缀的模块是文件的绝对路径。 例如，require('/home/marco/foo.js') 会加载 /home/marco/foo.js 文件。
+//    2.2以 './' 为前缀的模块是相对于调用 require() 的文件的。 也就是说，circle.js 必须和 foo.js 在同一目录下以便于 require('./circle') 找到它。
+//    2.3当没有以 '/'、'./' 或 '../' 开头来表示文件时，这个模块必须是一个核心模块或加载自 node_modules 目录。
 Module._resolveLookupPaths = function(request, parent, newReturn) { //request 当前加载的模块名称,parent 父亲模块
 
   //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。
@@ -648,7 +649,7 @@ function getInspectorCallWrapper() {
 // 负责具体filename的文件查找
 Module._resolveFilename = function(request, parent, isMain) { //request 当前加载的模块名称,parent 父亲模块，/* isMain */ false  是不是主入口文件
 
-  //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。满足 是原生模块且不是内部模块,则直接返回 当前加载的模块名称request。
+  //NativeModule用于管理js模块，头部引入的。NativeModule.nonInternalExists()用来判断是否 是原生模块且不是内部模块，所谓内部模块就是指lib/internal 文件目录下的模块，像fs等。满足 是原生模块且不是内部模块，也就是说是node.js下lib文件夹下的模块，但不包含lib/internal 文件目录下的模块，并且newReturn 为true，则返回null ，如果newReturn 为false 则返回［request, []］。
   if (NativeModule.nonInternalExists(request)) { 
     return request;
   }

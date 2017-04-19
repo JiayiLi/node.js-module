@@ -465,6 +465,7 @@
     return script.runInThisContext();
   }
 
+  // NativeModule对象用于管理核心模块
   function NativeModule(id) {
     this.filename = `${id}.js`;
     this.id = id;
@@ -473,7 +474,7 @@
     this.loading = false;
   }
 
-  NativeModule._source = process.binding('natives'); //把所有内置的js模块放在NativeModule._source上
+  NativeModule._source = process.binding('natives'); //它通过调用process.binding(“natives”)把所有内置的js模块放在NativeModule._source上，并提供require接口供调用。
   NativeModule._cache = {};
 
   NativeModule.require = function(id) {

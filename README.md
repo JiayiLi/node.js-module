@@ -49,10 +49,10 @@ PS：由于 Node.js 主要用于服务器编程，模块文件一般都已经存
 ### node 模块实现
 
 require 一个模块之后，有如下图几个重要的方法，被先后调用
-![函数调用](./Module.prototype.require.png)
+![函数调用](image/Module.prototype.require.png)
 
 查找路径顺序：
-![Alt text](./903320-20170420141719274-1325161899.png)
+![Alt text](image/903320-20170420141719274-1325161899.png)
 
 
 **建议：** 参照上面两图理清思路。

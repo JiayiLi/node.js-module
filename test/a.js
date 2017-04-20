@@ -1,17 +1,5 @@
-// function Module(id, parent) {
-//   this.id = id;
-//   this.exports = {};
-//   this.parent = parent;
-//   this.filename = null;
-//   this.loaded = false;
-//   this.children = [];
-// }
+// 可以尝试在终端 输入 node a.js 看打印结果
 
-// module.exports = Module;
-
-// var module = new Module(filename, parent);
-
-// module
 console.log('module.id: ', module.id);
 console.log('module.exports: ', module.exports);
 console.log('module.parent: ', module.parent);

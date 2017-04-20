@@ -1,4 +1,5 @@
-// module
+// 可以尝试在终端 输入 node b.js 看打印结果
+
 console.log('module.id: ', module.id);
 console.log('module.exports: ', module.exports);
 console.log('module.parent: ', module.parent);

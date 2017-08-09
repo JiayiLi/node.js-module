@@ -18,6 +18,12 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
+// 
+// 感谢并学习自：
+// require() 源码解读 地址：http://www.ruanyifeng.com/blog/2015/05/require.html
+// Node.js模块加载过程module.js源码阅读  地址：https://segmentfault.com/a/1190000002953344
+// Nodejs源码解析之module 地址：http://blog.csdn.net/leoleocs/article/details/50245677
+// 以及英文原文注释翻译
 
 'use strict';
 
